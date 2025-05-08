@@ -10,39 +10,86 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python and install apkeep
+      - name: Fetch APKs from GitHub Releases (Repo 1)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-pip
-          pip install apkeep
+          # Define the first GitHub repository and release tag
+          REPO="tanujnotes/Olauncher"  # Replace with the target repository
+          TAG="latest"  # Set the tag you want (e.g., "latest" or a version)
 
-      - name: Fetch APK from GitHub Release
-        id: github_release
-        uses: robinraju/release-downloader@v1.8
-        with:
-          repository: "tanujnotes/Olauncher"  # Replace with the target repository
-          tag: "latest"
-          fileName: "*.apk"
-          out-file-path: "./"
+          # Get the GitHub release URL for all APK files
+          ASSETS=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG" | jq -r '.assets[] | select(.name | endswith(".apk"))')
 
+          # Download all APKs if valid assets are found
+          if [ -n "$ASSETS" ]; then
+            echo "Downloading APKs from GitHub release $REPO..."
+            echo "$ASSETS" | while IFS= read -r asset; do
+              URL=$(echo "$asset" | jq -r '.browser_download_url')
+              FILENAME=$(basename "$URL")
+              echo "Downloading $FILENAME..."
+              curl -L -o "./$FILENAME" "$URL"
+            done
+          else
+            echo "No APKs found in the GitHub release for tag $TAG in $REPO"
+          fi
 
-      - name: Fetch Termux APK from F-Droid
-        id: fdroid
+      - name: Fetch APKs from F-Droid (Repo 2)
         run: |
-          PACKAGE_NAME="com.termux"  # Replace with the target package name
-          apkeep -a $PACKAGE_NAME -d f-droid -o .
-          VERSION=$(apkeep -l -a $PACKAGE_NAME -d f-droid | head -1)
-          echo "Latest version of $PACKAGE_NAME is $VERSION"
+          # Define an array of F-Droid package names
+          PACKAGE_NAMES=("com.termux" "org.libreoffice.android")  # Add more package names as needed
 
+          for PACKAGE_NAME in "${PACKAGE_NAMES[@]}"; do
+            # Get the latest APK version from F-Droid's JSON API
+            VERSION=$(curl -s "https://f-droid.org/api/v1/packages/$PACKAGE_NAME/" | jq -r '.version')
+
+            # Check if a valid version was returned
+            if [ -n "$VERSION" ]; then
+              echo "Latest version of $PACKAGE_NAME is $VERSION"
+
+              # Construct the APK download URL
+              APK_URL="https://f-droid.org/repo/$PACKAGE_NAME-$VERSION.apk"
+              FILENAME="$PACKAGE_NAME-$VERSION.apk"
+              
+              # Download the APK file directly from F-Droid
+              curl -L -o "./$FILENAME" "$APK_URL"
+            else
+              echo "No APK found for package $PACKAGE_NAME on F-Droid"
+            fi
+          done
+
+      - name: Fetch APKs from GitHub Releases (Repo 3)
+        run: |
+          # Define another GitHub repository and release tag
+          REPO="another/repo"  # Replace with another target GitHub repository
+          TAG="latest"  # Set the tag you want (e.g., "latest" or a version)
+
+          # Get the GitHub release URL for all APK files
+          ASSETS=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG" | jq -r '.assets[] | select(.name | endswith(".apk"))')
+
+          # Download all APKs if valid assets are found
+          if [ -n "$ASSETS" ]; then
+            echo "Downloading APKs from GitHub release $REPO..."
+            echo "$ASSETS" | while IFS= read -r asset; do
+              URL=$(echo "$asset" | jq -r '.browser_download_url')
+              FILENAME=$(basename "$URL")
+              echo "Downloading $FILENAME..."
+              curl -L -o "./$FILENAME" "$URL"
+            done
+          else
+            echo "No APKs found in the GitHub release for tag $TAG in $REPO"
+          fi
 
       - name: Commit and Push Changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add *.apk 
-          git commit -m "Update APKs"
-          git push
+          git add *.apk || true
+          if git diff --cached --quiet; then
+            echo "No new APKs to commit."
+          else
+            git commit -m "Update APKs"
+            git push
