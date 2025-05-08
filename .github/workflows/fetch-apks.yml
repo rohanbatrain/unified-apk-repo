@@ -14,7 +14,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-
+      - name: Set up Python and install apkeep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip install apkeep
 
       - name: Fetch APK from GitHub Release
         id: github_release
@@ -26,10 +30,10 @@ jobs:
           out-file-path: "./"
 
 
-      - name: Fetch APK from F-Droid
+      - name: Fetch Termux APK from F-Droid
         id: fdroid
         run: |
-          PACKAGE_NAME="org.example.app"  # Replace with the target package name
+          PACKAGE_NAME="com.termux"  # Replace with the target package name
           apkeep -a $PACKAGE_NAME -d f-droid -o .
           VERSION=$(apkeep -l -a $PACKAGE_NAME -d f-droid | head -1)
           echo "Latest version of $PACKAGE_NAME is $VERSION"
