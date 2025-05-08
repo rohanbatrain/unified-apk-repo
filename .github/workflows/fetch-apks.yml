@@ -1,0 +1,44 @@
+name: Fetch Latest APKs
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # Runs every 6 hours
+  workflow_dispatch:
+
+jobs:
+  fetch-apks:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+
+
+      - name: Fetch APK from GitHub Release
+        id: github_release
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: "tanujnotes/Olauncher"  # Replace with the target repository
+          tag: "latest"
+          fileName: "*.apk"
+          out-file-path: "./"
+
+
+      - name: Fetch APK from F-Droid
+        id: fdroid
+        run: |
+          PACKAGE_NAME="org.example.app"  # Replace with the target package name
+          apkeep -a $PACKAGE_NAME -d f-droid -o .
+          VERSION=$(apkeep -l -a $PACKAGE_NAME -d f-droid | head -1)
+          echo "Latest version of $PACKAGE_NAME is $VERSION"
+
+
+      - name: Commit and Push Changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add *.apk 
+          git commit -m "Update APKs"
+          git push
